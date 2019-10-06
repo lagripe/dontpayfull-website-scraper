@@ -22,31 +22,37 @@ def getStoresByLetter(letter):
 
 # ------- Change HERE ------------
 configPath = 'app-py-e36d6-firebase-adminsdk-7ik7w-49cb3022e9.json'
+pushlinksPath = 'pushlinks.json'
 codes_table = 'codes_collection'
 deals_table = 'deals_collection'
+pushlink_table = 'pushlink_collection'
 minRandom = 120
 maxRandom = 670
 rxid = 'yacine'
-database = 'app-py-e36d6'
-
+store_name = 'https://www.dontpayfull.com/at/walmart.com'
 # --------------------------------
 
 def getStoreCoupons(store_url):
     req = requests.get(store_url)
     parser = bs4.BeautifulSoup(req.content,"html.parser")
-    print('- - - - - - - - - Getting Codes - - - - - - - - - ')
+    print('- - - - - - - - - Deleting old data and pushing new ones - - - - - - - - - ')
     deleteCollectionDocs(codes_table)
     deleteCollectionDocs(deals_table)
+    #Upload pushlinks
+    deletePushlink()
+    uploadPushlinks()
+    print('- - - - - - - - - Getting Codes - - - - - - - - - ')
+
     #Get Codes 
-    for coupon in parser.find_all('li',attrs={'class':'obox code clearfix'}):
+    for i,coupon in enumerate(parser.find_all('li',attrs={'class':'obox code clearfix'})):
         code,title =getCouponCode(coupon['id'])
-        insertCodes(codes_table,title,code)
+        insertCodes(codes_table,title,code,i)
     #Get Deals 
     print('- - - - - - - - - Getting Deals - - - - - - - - - ')
-    for coupon in parser.find_all('li',attrs={'class':'obox deal clearfix'}):
+    for i,coupon in enumerate(parser.find_all('li',attrs={'class':'obox deal clearfix'})):
         url_link,title = getCouponDeals(coupon['id'])
-        insertDeals(deals_table,title,url_link)
-
+        insertDeals(deals_table,title,url_link,i)
+    
 def getCouponCode(code):
     req = requests.get('https://www.dontpayfull.com/coupons/getcoupon/?id={}'.format(code))
     parser = bs4.BeautifulSoup(req.content,"html.parser")
@@ -67,8 +73,13 @@ def deleteCollectionDocs(collection):
     docs = users_ref.get()
     for doc in docs:
         doc.reference.delete()
-        
-def insertCodes(collection,title,code):
+def deletePushlink():
+    # Delete old documents
+    users_ref = db.collection(pushlink_table)
+    docs = users_ref.get()
+    for doc in docs:
+        doc.reference.delete()
+def insertCodes(collection,title,code,id):
     data = {
             'rxid':rxid,
             'coupon':code,
@@ -78,9 +89,9 @@ def insertCodes(collection,title,code):
             'shares':str(rd.Random().randint(minRandom,maxRandom))
         }
     
-    doc_ref = db.collection(collection).document()
+    doc_ref = db.collection(collection).document(str(id))
     doc_ref.set(data)
-def insertDeals(collection,title,link):
+def insertDeals(collection,title,link,id):
     data = {
             'link':link,
             'title':title,
@@ -88,12 +99,19 @@ def insertDeals(collection,title,link):
             'likes':str(rd.Random().randint(minRandom,maxRandom)),
             'shares':str(rd.Random().randint(minRandom,maxRandom))
         }
-    doc_ref = db.collection(collection).document()
+    doc_ref = db.collection(collection).document(str(id))
     doc_ref.set(data)
-
+def uploadPushlinks():
+    pushlinksData = []
+    with open(pushlinksPath,'r') as file:
+        pushlinksData = json.loads(file.read())['pushlinks']
+    for id,data in enumerate(pushlinksData):
+        print(data)
+        doc_ref = db.collection(pushlink_table).document(str(id))
+        doc_ref.set(data)
 
 cred = credentials.Certificate(configPath)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-getStoreCoupons('https://www.dontpayfull.com/at/walmart.com')
+getStoreCoupons(store_name)
