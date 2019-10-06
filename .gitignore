@@ -2,8 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
-app*.json
-push*.json
+app*
+push*
 # C extensions
 *.so
 
