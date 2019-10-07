@@ -29,18 +29,21 @@ pushlink_table = 'pushlink_collection'
 minRandom = 120
 maxRandom = 670
 rxid = 'yacine'
-store_name = 'https://www.dontpayfull.com/at/walmart.com'
+store_name = 'https://www.dontpayfull.com/at/redbubble.com'
 # --------------------------------
 
 def getStoreCoupons(store_url):
-    req = requests.get(store_url)
+    headers = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'}
+    req = requests.get(store_url,headers=headers)
     parser = bs4.BeautifulSoup(req.content,"html.parser")
+    
     print('- - - - - - - - - Deleting old data and pushing new ones - - - - - - - - - ')
     deleteCollectionDocs(codes_table)
     deleteCollectionDocs(deals_table)
     #Upload pushlinks
     deletePushlink()
     uploadPushlinks()
+    
     print('- - - - - - - - - Getting Codes - - - - - - - - - ')
 
     #Get Codes 
@@ -48,6 +51,7 @@ def getStoreCoupons(store_url):
         code,title =getCouponCode(coupon['id'])
         insertCodes(codes_table,title,code,i)
     #Get Deals 
+    
     print('- - - - - - - - - Getting Deals - - - - - - - - - ')
     for i,coupon in enumerate(parser.find_all('li',attrs={'class':'obox deal clearfix'})):
         url_link,title = getCouponDeals(coupon['id'])
@@ -106,7 +110,6 @@ def uploadPushlinks():
     with open(pushlinksPath,'r') as file:
         pushlinksData = json.loads(file.read())['pushlinks']
     for id,data in enumerate(pushlinksData):
-        print(data)
         doc_ref = db.collection(pushlink_table).document(str(id))
         doc_ref.set(data)
 
