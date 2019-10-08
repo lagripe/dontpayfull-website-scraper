@@ -1,61 +1,67 @@
-import requests,bs4,re,json
+import requests,bs4,re,json,fake_useragent
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import random as rd
-'''
+
+
+# ------- Change HERE ------------
+configPath = 'app-cb48d-firebase-adminsdk-dhvhk-f28c82a462.json'
+pushlinksPath = 'pushlinks.json'
+collection = 'StoresCollection'
+pushlink_table = 'pushlink_collection'
+minRandom = 120
+maxRandom = 670
+headers = {'User-Agent':'Mozilla/7.0 (Windows NT 5; Win64; x32) AppleWebKit/528.36 (KHTML, like Gecko) Chrome/76.0.3865.90 Safari/544.36'}
+# --------------------------------
+
+
 def getSiteMapLetterPagination(letter):
-    req = requests.get('https://www.dontpayfull.com/sitemap/{}'.format(letter))
+    req = requests.get('https://www.dontpayfull.com/sitemap/{}'.format(letter),headers=headers)
     parser = bs4.BeautifulSoup(req.content,"html.parser")
+    print(req.content)
     return len(parser.find_all('ul',attrs={'class':'pagination'})[1].findChildren('a'))
 
 def getStoresByLetter(letter):
     pageCount = getSiteMapLetterPagination(letter)
-    print(pageCount)
     urlLetter = 'https://www.dontpayfull.com/sitemap/{}'.format(letter)
+    stores = []
     for i in range(1,pageCount + 1):    
-'''
+        req = requests.get(urlLetter+'/page/{}'.format(i),headers=headers)
+        print(req.url)
+        parser = bs4.BeautifulSoup(req.content,"html.parser")
+        stores = stores + ['https://www.dontpayfull.com'+store.findChild('a')['href'] \
+                            for store in parser.find('div',attrs={'class':'col-xs-12 sitemap page'})\
+                                               .find_all('div',attrs={'class':'col-md-3 col-xs-6'})
+                            ]
 
 
+def getStores():
+    for i in range(65,97):
+        getStoresByLetter(chr(i))
 
 
+getStores()
 
-# ------- Change HERE ------------
-configPath = 'app-py-e36d6-firebase-adminsdk-7ik7w-49cb3022e9.json'
-pushlinksPath = 'pushlinks.json'
-codes_table = 'codes_collection'
-deals_table = 'deals_collection'
-pushlink_table = 'pushlink_collection'
-minRandom = 120
-maxRandom = 670
-rxid = 'yacine'
-store_name = 'https://www.dontpayfull.com/at/redbubble.com'
-# --------------------------------
 
-def getStoreCoupons(store_url):
-    headers = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'}
+def getStoreCoupons(store_url,store_name):
     req = requests.get(store_url,headers=headers)
     parser = bs4.BeautifulSoup(req.content,"html.parser")
     
     print('- - - - - - - - - Deleting old data and pushing new ones - - - - - - - - - ')
-    deleteCollectionDocs(codes_table)
-    deleteCollectionDocs(deals_table)
+    deleteCollectionDocs(collection)
     #Upload pushlinks
-    deletePushlink()
-    uploadPushlinks()
     
     print('- - - - - - - - - Getting Codes - - - - - - - - - ')
 
     #Get Codes 
     for i,coupon in enumerate(parser.find_all('li',attrs={'class':'obox code clearfix'})):
         code,title =getCouponCode(coupon['id'])
-        insertCodes(codes_table,title,code,i)
     #Get Deals 
     
     print('- - - - - - - - - Getting Deals - - - - - - - - - ')
     for i,coupon in enumerate(parser.find_all('li',attrs={'class':'obox deal clearfix'})):
         url_link,title = getCouponDeals(coupon['id'])
-        insertDeals(deals_table,title,url_link,i)
     
 def getCouponCode(code):
     req = requests.get('https://www.dontpayfull.com/coupons/getcoupon/?id={}'.format(code))
@@ -83,27 +89,33 @@ def deletePushlink():
     docs = users_ref.get()
     for doc in docs:
         doc.reference.delete()
-def insertCodes(collection,title,code,id):
+def insertCodes(collection,title,code,store_name):
+    views = rd.Random().randint(minRandom,maxRandom)
     data = {
-            'rxid':rxid,
-            'coupon':code,
-            'title':title,
-            'views':str(rd.Random().randint(minRandom,maxRandom)),
-            'likes':str(rd.Random().randint(minRandom,maxRandom)),
-            'shares':str(rd.Random().randint(minRandom,maxRandom))
+        'title':title,
+        'coupon':code, 
+        'store_name':store_name,
+        'store_key':str(store_name[0]).upper(),
+        'full_store_key':str(store_name).upper(),  
+        'views':views,
+        'likes':rd.Random().randint(views,maxRandom)
         }
     
-    doc_ref = db.collection(collection).document(str(id))
+    doc_ref = db.collection(collection).document()
     doc_ref.set(data)
-def insertDeals(collection,title,link,id):
+def insertDeals(collection,title,link,store_name):
+    views = rd.Random().randint(minRandom,maxRandom)
     data = {
-            'link':link,
-            'title':title,
-            'views':str(rd.Random().randint(minRandom,maxRandom)),
-            'likes':str(rd.Random().randint(minRandom,maxRandom)),
-            'shares':str(rd.Random().randint(minRandom,maxRandom))
+            
+        'title':title,
+        'link':link,
+        'store_name':store_name,
+        'store_key':str(store_name[0]).upper(),  
+        'full_store_key':str(store_name).upper(),  
+        'views':views,
+        'likes':rd.Random().randint(views,maxRandom)
         }
-    doc_ref = db.collection(collection).document(str(id))
+    doc_ref = db.collection(collection).document()
     doc_ref.set(data)
 def uploadPushlinks():
     pushlinksData = []
@@ -117,4 +129,3 @@ cred = credentials.Certificate(configPath)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-getStoreCoupons(store_name)
